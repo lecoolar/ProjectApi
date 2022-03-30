@@ -13,6 +13,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using ProjectApi.Context;
+using ProjectApi.Repository;
 
 namespace ProjectApi
 {
@@ -37,7 +38,9 @@ namespace ProjectApi
             services
                 .AddControllers()
                 .AddNewtonsoftJson(options => options.SerializerSettings.ReferenceLoopHandling = Newtonsoft.Json.ReferenceLoopHandling.Ignore);
-            
+            services.AddScoped(typeof(ProjectItemRepository));
+            services.AddScoped(typeof(TaskItemRepository));
+
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

@@ -7,7 +7,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectApi.Context;
 using ProjectApi.Enums;
+using ProjectApi.Filters;
 using ProjectApi.Models;
+using ProjectApi.Repository;
 
 namespace ProjectApi.Controllers
 {
@@ -15,11 +17,11 @@ namespace ProjectApi.Controllers
     [ApiController]
     public class ProjectItemsController : ControllerBase
     {
-        private readonly ProjectTasksContext _context;
+        private readonly ProjectItemRepository _projectItemRepository;
 
-        public ProjectItemsController(ProjectTasksContext context)
+        public ProjectItemsController(ProjectItemRepository projectItemRepository)
         {
-            _context = context;
+            _projectItemRepository = projectItemRepository;
         }
 
         // GET: api/ProjectItems
@@ -32,98 +34,31 @@ namespace ProjectApi.Controllers
             string filterStartPriority = null,
             string filterEndPriority = null)
         {
-            var result = await _context.Projects.Include(p => p.TaskItems).ToListAsync();
-            if (!string.IsNullOrEmpty(sortBy))
+            try
             {
-                switch (sortBy.ToLower())
-                {
-                    case "id":
-                        result = result.OrderBy(e => e.Id).ToList();
-                        break;
-                    case "name":
-                        result = result.OrderBy(e => e.Name).ToList();
-                        break;
-                    case "startdate":
-                        result = result.OrderBy(e => e.StartDate).ToList();
-                        break;
-                    case "completiondate":
-                        result = result.OrderBy(e => e.CompletionDate).ToList();
-                        break;
-                    case "statusproject":
-                        result = result.OrderBy(e => e.StatusProject).ToList();
-                        break;
-                    case "priority":
-                        result = result.OrderBy(e => e.Priority).ToList();
-                        break;
-                    case "taskitems":
-                        result = result.OrderBy(e => e.TaskItems).ToList();
-                        break;
-                }
+                var result = await _projectItemRepository.GetProjectItemByFilters(sortBy, filtersSartdate, filterEndDate,
+                    filterStatusproject, filterStartPriority, filterEndPriority);
+                return result;
             }
-
-            if (!string.IsNullOrEmpty(filtersSartdate) && !string.IsNullOrEmpty(filterEndDate))
+            catch (Exception ex)
             {
-                if (DateTime.TryParse(filtersSartdate, out var startDate)
-                    && DateTime.TryParse(filterEndDate, out var endDate))
-                {
-                    if (startDate > endDate)
-                        return BadRequest("Start date cannot be more that end date");
-                    result = result
-                        .Where(e => e.StartDate >= startDate && e.StartDate <= endDate).ToList();
-                }
-                else
-                {
-                    return BadRequest("Incorrect dates");
-                }
-
-
+                return BadRequest(ex.Message);
             }
-
-            if (!string.IsNullOrEmpty(filterStatusproject))
-            {
-                if (Enum.TryParse<StatusProject>(filterStatusproject, true, out var statusProject))
-                {
-                    result = result
-                        .Where(e => e.StatusProject == statusProject).ToList();
-                }
-                else
-                {
-                    return BadRequest("Incorrect Status");
-                }
-            }
-
-            if (!string.IsNullOrEmpty(filterStartPriority) 
-                && !string.IsNullOrEmpty(filterEndPriority))
-            {
-                if (int.TryParse(filterStartPriority, out var startPriority) 
-                    && int.TryParse(filterEndPriority, out var endPriority))
-                {
-                    if (startPriority < endPriority)
-                    {
-                        return BadRequest("Start priority cannot be more that end priority");
-                    }
-
-                    result = result
-                        .Where(e => e.Priority >= startPriority && e.Priority <= endPriority)
-                        .ToList();
-                }
-
-            }
-            return result;
         }
 
         // GET: api/ProjectItems/5
         [HttpGet("{id}")]
         public async Task<ActionResult<ProjectItem>> GetProjectItem(long id)
         {
-            var projectItem = await _context.Projects.Include(p => p.TaskItems).FirstOrDefaultAsync(t => t.Id == id);
-
-            if (projectItem == null)
+            try
             {
-                return NotFound();
+                var result = await _projectItemRepository.GetById(id);
+                return result;
             }
-
-            return projectItem;
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // PUT: api/ProjectItems/5
@@ -131,30 +66,15 @@ namespace ProjectApi.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutProjectItem(long id, ProjectItem projectItem)
         {
-            if (id != projectItem.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(projectItem).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                await _projectItemRepository.ReplaceProjectItem(id, projectItem);
+                return NoContent();
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex)
             {
-                if (!ProjectItemExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return BadRequest(ex.Message);
             }
-
-            return NoContent();
         }
 
         // POST: api/ProjectItems
@@ -162,31 +82,30 @@ namespace ProjectApi.Controllers
         [HttpPost]
         public async Task<ActionResult<ProjectItem>> PostProjectItem(ProjectItem projectItem)
         {
-            _context.Projects.Add(projectItem);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction("GetProjectItem", new { id = projectItem.Id }, projectItem);
+            try
+            {
+                await _projectItemRepository.AddProjectItem(projectItem);
+                return CreatedAtAction("GetProjectItem", new { id = projectItem.Id }, projectItem);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // DELETE: api/ProjectItems/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteProjectItem(long id)
         {
-            var projectItem = await _context.Projects.FindAsync(id);
-            if (projectItem == null)
+            try
             {
-                return NotFound();
+                await _projectItemRepository.DeleteProjectItem(id);
+                return NoContent();
             }
-
-            _context.Projects.Remove(projectItem);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool ProjectItemExists(long id)
-        {
-            return _context.Projects.Any(e => e.Id == id);
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }

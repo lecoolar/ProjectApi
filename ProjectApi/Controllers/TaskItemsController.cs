@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ProjectApi.Context;
 using ProjectApi.Models;
+using ProjectApi.Repository;
 
 namespace ProjectApi.Controllers
 {
@@ -14,32 +15,40 @@ namespace ProjectApi.Controllers
     [ApiController]
     public class TaskItemsController : ControllerBase
     {
-        private readonly ProjectTasksContext _context;
+        private readonly TaskItemRepository _taskItemRepository;
 
-        public TaskItemsController(ProjectTasksContext context)
+        public TaskItemsController(TaskItemRepository taskItemRepository)
         {
-            _context = context;
+            _taskItemRepository = taskItemRepository;
         }
 
         // GET: api/TaskItems
         [HttpGet]
         public async Task<ActionResult<IEnumerable<TaskItem>>> GetTaskItem()
         {
-            return await _context.Tasks.Include(t => t.Project).ToListAsync();
+            try
+            {
+                return await _taskItemRepository.GetTaskItems();
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // GET: api/TaskItems/5
         [HttpGet("{id}")]
         public async Task<ActionResult<TaskItem>> GetTaskItem(long id)
         {
-            var taskItem = await _context.Tasks.Include(t => t.Project).FirstOrDefaultAsync(t => t.Id == id);
-
-            if (taskItem == null)
+            try
             {
-                return NotFound();
+                var result = await _taskItemRepository.GetById(id);
+                return result;
             }
-
-            return taskItem;
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
         // PUT: api/TaskItems/5
@@ -47,30 +56,15 @@ namespace ProjectApi.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutTaskItem(long id, TaskItem taskItem)
         {
-            if (id != taskItem.Id)
-            {
-                return BadRequest();
-            }
-
-            _context.Entry(taskItem).State = EntityState.Modified;
-
             try
             {
-                await _context.SaveChangesAsync();
+                await _taskItemRepository.ReplaceTaskItem(id, taskItem);
+                return NoContent();
             }
-            catch (DbUpdateConcurrencyException)
+            catch (Exception ex)
             {
-                if (!TaskItemExists(id))
-                {
-                    return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                return BadRequest(ex.Message);
             }
-
-            return NoContent();
         }
 
         // POST: api/TaskItems
@@ -78,32 +72,32 @@ namespace ProjectApi.Controllers
         [HttpPost]
         public async Task<ActionResult<TaskItem>> PostTaskItem(TaskItem taskItem)
         {
-            _context.Tasks.Add(taskItem);
-            await _context.SaveChangesAsync();
+            try
+            {
+                await _taskItemRepository.AddTaskItem(taskItem);
+                return CreatedAtAction(nameof(GetTaskItem), new { id = taskItem.Id }, taskItem);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
 
-            //return CreatedAtAction("GetTaskItem", new { id = taskItem.Id }, taskItem);
-            return CreatedAtAction(nameof(GetTaskItem), new { id = taskItem.Id }, taskItem);
         }
 
         // DELETE: api/TaskItems/5
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTaskItem(long id)
         {
-            var taskItem = await _context.Tasks.FindAsync(id);
-            if (taskItem == null)
+            try
             {
-                return NotFound();
+                await _taskItemRepository.DeleteTaskItem(id);
+                return NoContent();
             }
-
-            _context.Tasks.Remove(taskItem);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
+            catch (Exception ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
 
-        private bool TaskItemExists(long id)
-        {
-            return _context.Tasks.Any(e => e.Id == id);
-        }
     }
 }
